@@ -90,7 +90,7 @@ function draw() {
     drawSkeleton();
     // console.log(poses);
     if (poses.length > 0) {
-        drawWaveform(poses[0].pose.leftAnkle.x, poses[0].pose.rightAnkle.x);
+        drawWaveform(poses[0].pose.leftWrist.y, poses[0].pose.rightWrist.y);
     }
     
 }
@@ -133,7 +133,7 @@ function drawSkeleton() {
 function drawWaveform(valueY, valueX) {
     // background(30);
     
-    // console.log(valueX, valueY);
+    
 
     // map mouseY to modulator freq between a maximum and minimum frequency
     let modFreq = map(valueY, height, 0, modMaxFreq, modMinFreq);
@@ -145,7 +145,7 @@ function drawWaveform(valueY, valueX) {
     let modDepth = map(valueX, 0, height, modMaxDepth, modMinDepth);
     modulator.amp(modDepth);
 
-    console.log(modDepth, modFreq);
+    console.log(valueY, valueX, modDepth, modFreq);
 
     // // analyze the waveform
     // waveform = analyzer.waveform();
