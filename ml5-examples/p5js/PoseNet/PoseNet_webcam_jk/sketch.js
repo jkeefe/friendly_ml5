@@ -19,19 +19,18 @@ let carrier; // this is the oscillator we will hear
 let modulator; // this oscillator will modulate the frequency of the carrier
 let analyzer; // we'll use this visualize the waveform
 
-// the carrier frequency pre-modulation
-let carrierBaseFreq = 220;
+let notes = [ 60, 62, 64, 65, 67, 69];
+let trigger = 0;
+let autoplay = false;
+let osc;
 
-// min/max ranges for modulator
-let modMaxFreq = 440;
-let modMinFreq = 50;
-let modMaxDepth = 150;
-let modMinDepth = -150;
-
-
+var button;
+var button_state = false;
 
 function setup() {
     createCanvas(640, 480);
+        
+    // set up the video
     video = createCapture(VIDEO);
     video.size(width, height);
 
@@ -42,24 +41,21 @@ function setup() {
     poseNet.on('pose', function(results) {
         poses = results;
     });
+    
     // Hide the video element, and just show the canvas
     video.hide();
     
-    carrier = new p5.Oscillator('sine');
-    carrier.amp(0); // set amplitude
-    carrier.freq(carrierBaseFreq); // set frequency
-    carrier.start(); // start oscillating
-
-    // try changing the type to 'square', 'sine' or 'triangle'
-    modulator = new p5.Oscillator('sawtooth');
-    modulator.start();
-
-    // add the modulator's output to modulate the carrier's frequency
-    modulator.disconnect();
-    carrier.freq(modulator);
-
-    // create an FFT to analyze the audio
-    // analyzer = new p5.FFT();
+    // make a button
+    button = createButton('Click to toggle sound');
+    button.position(19, 100);
+    button.hide()
+    button.mousePressed(toggleSound);
+    
+    // A triangle oscillator
+    osc = new p5.TriOsc();
+    // Start silent
+    osc.start();
+    osc.amp(0);
 
     var myDiv = createDiv('click to start audio');
     myDiv.position(0, 0);
@@ -67,7 +63,6 @@ function setup() {
     // Start the audio context on a click/touch event
     userStartAudio().then(function() {
         myDiv.remove();
-        carrier.amp(1.0, 0.01);
     });
     
     function touchStarted() {
@@ -80,17 +75,29 @@ function setup() {
 
 function modelReady() {
     select('#status').html('Model Loaded');
+    button.show()
+    osc.amp(0);
 }
 
 function draw() {
     image(video, 0, 0, width, height);
 
+    console.log(poses);
+
     // We can call both functions to draw all keypoints and the skeletons
     drawKeypoints();
     drawSkeleton();
-    // console.log(poses);
-    if (poses.length > 0) {
-        drawWaveform(poses[0].pose.leftWrist.y, poses[0].pose.rightWrist.y);
+    wristToNote();
+}
+
+function toggleSound() {
+    
+    if (!button_state) {
+        osc.amp(1.0,0.01);
+        button_state = true;
+    } else {
+        osc.amp(0);
+        button_state = false;
     }
     
 }
@@ -130,61 +137,95 @@ function drawSkeleton() {
 }
 
 
-function drawWaveform(valueY, valueX) {
-    // background(30);
+function wristToNote() {
     
+    // return if no poses yet
+    if (!poses || poses.length < 1) {
+        return;
+    } 
     
+    // map the position of right wrist onto the set of notes
+    let right_wrist_y = poses[0].pose.rightWrist.y
+    let right_wrist_confidence = poses[0].pose.rightWrist.confidence
+    
+    // check the rightwrist keypoint score [10] to see if it's in view
+    if (poses[0].pose.keypoints[10].score > 0.2) {
+        
+        let note = parseInt( map(right_wrist_y, 0, height, notes.length -1, 0), 10)
+        console.log(right_wrist_y, note, notes[note], right_wrist_confidence)
+        playNote(notes[note])
+        
+    }
 
-    // map mouseY to modulator freq between a maximum and minimum frequency
-    let modFreq = map(valueY, height, 0, modMaxFreq, modMinFreq);
-    modulator.freq(modFreq);
 
-    // change the amplitude of the modulator
-    // negative amp reverses the sawtooth waveform, and sounds percussive
-    //
-    let modDepth = map(valueX, 0, height, modMaxDepth, modMinDepth);
-    modulator.amp(modDepth);
-
-    console.log(valueY, valueX, modDepth, modFreq);
-
-    // // analyze the waveform
-    // waveform = analyzer.waveform();
-    // 
-    // // draw the shape of the waveform
-    // stroke(255);
-    // strokeWeight(10);
-    // beginShape();
-    // for (let i = 0; i < waveform.length; i++) {
-    //     let x = map(i, 0, waveform.length, 0, width);
-    //     let y = map(waveform[i], -1, 1, -height / 2, height / 2);
-    //     vertex(x, y + height / 2);
-    // }
-    // endShape();
-    // 
-    // strokeWeight(1);
-    // // add a note about what's happening
-    // text('Modulator Frequency: ' + modFreq.toFixed(3) + ' Hz', 20, 20);
-    // text(
-    //     'Modulator Amplitude (Modulation Depth): ' + modDepth.toFixed(3),
-    //     20,
-    //     40
-    // );
-    // text(
-    //     'Carrier Frequency (pre-modulation): ' + carrierBaseFreq + ' Hz',
-    //     width / 2,
-    //     20
-    // );
 }
 
-// // helper function to toggle sound
-// function toggleAudio(video) {
-//     video.mouseOver(function() {
-//         carrier.amp(1.0, 0.01);
-//     });
-//     video.touchStarted(function() {
-//         carrier.amp(1.0, 0.01);
-//     });
-//     video.mouseOut(function() {
-//         carrier.amp(0.0, 1.0);
-//     });
+// A function to play a note
+function playNote(value) {
+    // set the note
+    osc.freq(midiToFreq(value));
+        
+    // // Fade it in
+    // osc.fade(0.5,0.2);
+    
+}
+
+// 
+// function drawWaveform(valueY, valueX) {
+//     // background(30);
+// 
+// 
+// 
+//     // map mouseY to modulator freq between a maximum and minimum frequency
+//     let modFreq = map(valueY, height, 0, modMaxFreq, modMinFreq);
+//     modulator.freq(modFreq);
+// 
+//     // change the amplitude of the modulator
+//     // negative amp reverses the sawtooth waveform, and sounds percussive
+//     //
+//     let modDepth = map(valueX, 0, height, modMaxDepth, modMinDepth);
+//     modulator.amp(modDepth);
+// 
+//     console.log(valueY, valueX, modDepth, modFreq);
+// 
+//     // // analyze the waveform
+//     // waveform = analyzer.waveform();
+//     // 
+//     // // draw the shape of the waveform
+//     // stroke(255);
+//     // strokeWeight(10);
+//     // beginShape();
+//     // for (let i = 0; i < waveform.length; i++) {
+//     //     let x = map(i, 0, waveform.length, 0, width);
+//     //     let y = map(waveform[i], -1, 1, -height / 2, height / 2);
+//     //     vertex(x, y + height / 2);
+//     // }
+//     // endShape();
+//     // 
+//     // strokeWeight(1);
+//     // // add a note about what's happening
+//     // text('Modulator Frequency: ' + modFreq.toFixed(3) + ' Hz', 20, 20);
+//     // text(
+//     //     'Modulator Amplitude (Modulation Depth): ' + modDepth.toFixed(3),
+//     //     20,
+//     //     40
+//     // );
+//     // text(
+//     //     'Carrier Frequency (pre-modulation): ' + carrierBaseFreq + ' Hz',
+//     //     width / 2,
+//     //     20
+//     // );
 // }
+// 
+// // // helper function to toggle sound
+// // function toggleAudio(video) {
+// //     video.mouseOver(function() {
+// //         carrier.amp(1.0, 0.01);
+// //     });
+// //     video.touchStarted(function() {
+// //         carrier.amp(1.0, 0.01);
+// //     });
+// //     video.mouseOut(function() {
+// //         carrier.amp(0.0, 1.0);
+// //     });
+// // }
